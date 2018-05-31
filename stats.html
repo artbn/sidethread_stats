@@ -1,0 +1,359 @@
+<html>
+<head>
+<base target='_blank'>
+<script>
+// USEFUL FUNCTIONS
+Date.locale = {
+	en: {
+	   month_names: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+	   month_names_short: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+	}
+};
+Date.prototype.getMonthNameShort = function(lang) {
+	lang = lang && (lang in Date.locale) ? lang : 'en';
+	return Date.locale[lang].month_names_short[this.getUTCMonth()];
+};
+function dateStr(timestamp) {
+	var date = new Date(0);
+	date.setUTCSeconds(timestamp);
+	return date.getUTCDate() + ' ' + date.getMonthNameShort() + " '" + date.getUTCFullYear().toString().substring(2);
+}
+
+function getNo(str) {
+	var l = str.length;
+	if(l == 0) return null;
+		
+	var r = '';
+	for(var i = 0; i < l; i++) {
+		var s = str.charAt(i);
+		if(/^\d+$/.test(s)) {
+			r += s;
+			continue;
+		}
+		else if([' ', ',', '~', '^', '#', '*', '>'].indexOf(s) > -1) {
+			continue;
+		} else {
+			break;    
+		}
+	}
+	if(r == '' || !/\d/.test(r)) r = null;
+	return r;
+}
+
+function addCommas(num) {
+	return (num + "").replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+function clone(obj) {
+	if (obj === null || typeof(obj) !== 'object' || 'isActiveClone' in obj) return obj;
+
+	if (obj instanceof Date)
+		var temp = new obj.constructor(); //or new Date(obj);
+	else
+		var temp = obj.constructor();
+
+	for (var key in obj) {
+		if (Object.prototype.hasOwnProperty.call(obj, key)) {
+			obj['isActiveClone'] = null;
+			temp[key] = clone(obj[key]);
+			delete obj['isActiveClone'];
+		}
+	}
+
+	return temp;
+}
+</script>
+<style>
+body {
+	text-align: center;
+	font-family: Arial;
+}
+textarea {
+	width: 1000px;
+	height: 300px;
+}
+h1 {
+	margin-bottom: 5px;
+}
+input[type=button] {
+	cursor: pointer;
+}
+</style>
+<script>
+
+var threadID;
+function loadData() {
+	var script = document.createElement('script');
+	document.head.appendChild(script);
+	script.onload = function() {
+		document.getElementById('statusBox').style.display = 'none';
+		document.getElementById('allContent').style.display = '';
+		generateStats();		    
+	};
+	script.onerror = function() {
+		document.getElementById('statusBox').style.display = '';
+	}
+	threadID = document.getElementById('threadID').value;
+	script.src = 'data.' +threadID+ '.js';
+}
+
+window.onload = function() {
+	document.getElementById('threadID').focus();
+	document.getElementById('threadID').onkeydown = function(e) {
+		if(e.keyCode == 13) {
+			loadData();
+		}
+	}
+	document.getElementById('btn').onclick = loadData;
+}
+</script>
+</head>
+<body>
+
+<b>View stats of:</b>
+www.reddit.com/live/ <input type='text' id='threadID' placeholder='Thread ID (from URL)'>
+<input type='button' id='btn' value='Enter'>
+
+<div id='statusBox' style='display: none;'>
+<br><b id='status'>
+Server error. Ensure that you have run <a href='update.html'>update.html</a> on this thread before, and try again.
+</b><br>
+</div>
+
+<div id='allContent' style='display: none;'>
+
+<h1>Accurate up to <span id='lastUpdate'>???</span></h1>
+
+<h1>First Count</h1>
+<textarea id='FirstCount'></textarea>
+
+<h1>Hall of Counters</h1>
+<textarea id='HallOfCounters'></textarea>
+
+<h1>Trips (333s)</h1>
+<textarea id='Trips'></textarea>
+
+<h1>K's Participation</h1>
+<textarea id='GetsParticipation'></textarea>
+
+<h1>Days Participation</h1>
+<textarea id='DaysCounted'></textarea>
+
+<h1>Repeating Digits</h1>
+<textarea id='RepeatingDigits'></textarea>
+
+<h1>Palindromes</h1>
+<textarea id='Palindromes'></textarea>
+
+</div>
+
+<script>
+
+function generateStats() {
+
+if(getNo(chat[0].body) != null) {
+	document.getElementById('lastUpdate').innerHTML = getNo(chat[0].body);
+}
+
+// START ANALYSING
+var usersList = [];
+var l = chat.length;
+
+// FIRST COUNT
+var usersAnalysed = [];
+var firstCount = [];
+var firstCountStr = '';
+for(var i = chat.length - 1; i >= 0; i--) {
+	var info = clone(chat[i]);
+	if(info.author === null) continue;
+	if(info.stricken) continue;
+	//if(getNo(info.body) == null) continue;
+	info.author = '/u/' + info.author;
+	usersList.push(info.author);
+	if(usersAnalysed.indexOf(info.author) > -1) {
+		continue;
+	}
+	usersAnalysed.push(info.author);
+	firstCount.push(info);
+	info.body = "[" + info.body + "](https://www.reddit.com/live/" +threadID+ "/updates/" + info.id + ")"
+	firstCountStr = (info.author + " | " + info.body + " | " + dateStr(info.created_utc)).replace(/\n/g, '') + "\n" + firstCountStr;
+}
+document.getElementById('FirstCount').innerHTML = firstCountStr;
+
+// HALL OF COUNTERS
+var hocObj = {};
+for(var i = 0, len = usersList.length; i < len; i++) {
+	var user = usersList[i];
+	if(!hocObj.hasOwnProperty(user)) hocObj[user] = 0;
+	hocObj[user]++;
+
+}
+var hocArr = [];
+for(var i in hocObj) {
+	hocArr.push({user: i, count: hocObj[i]});
+}
+hocArr.sort(function(a, b) {
+	return b.count - a.count;
+});
+
+var hocStr = ''
+for(var i = 0, len = hocArr.length; i < len; i++) {
+	hocStr += (i+1) + ' | ' + hocArr[i].user + ' | ' + hocArr[i].count + '\n';
+}
+document.getElementById('HallOfCounters').innerHTML = hocStr;
+
+// TRIPS (END WITH 333)
+var trips = [];
+var tripsStr = '';
+var tripsLeaderboard = {};
+for(var i = 0; i < l; i++) {
+	var info = clone(chat[i]);
+	if(info.stricken) continue;
+	var no = getNo(info.body);
+	if(no == null) continue;
+	if(no.slice(-3) == '333' && no.length <= 6) {
+		trips.push(info);
+		
+		if(info.author == null) info.author = '[deleted]';
+		else {
+			info.author = '/u/' + info.author;
+			if(!tripsLeaderboard.hasOwnProperty(info.author)) tripsLeaderboard[info.author] = 0;
+			tripsLeaderboard[info.author]++;
+		}
+
+		tripsStr += "* [" + addCommas(no) + "](https://www.reddit.com/live/" +threadID+ "/updates/" + info.id + ") - "+ info.author + '\n';
+	}
+}
+// Trips leaderboard
+var tripsLeaderboardArr = [];
+for(var k in tripsLeaderboard) {
+	tripsLeaderboardArr.push({user: k, count: tripsLeaderboard[k]});
+}
+tripsLeaderboardArr.sort(function(a, b) {
+	return b.count - a.count;
+});
+var tripsLeaderboardStr = '';
+for(var i = 0, len = Math.min(tripsLeaderboardArr.length, 10); i < len; i++) {
+	tripsLeaderboardStr += (i+1) + ' | ' + tripsLeaderboardArr[i].user + ' | ' + tripsLeaderboardArr[i].count + '\n';
+}
+document.getElementById('Trips').innerHTML = tripsLeaderboardStr + '\n\#\#\#Trips\n\n' + tripsStr;
+
+// REPEATING DIGITS (EG XYZXYZ)
+var repeatingDigitsLeaderboard = [];
+var repeatingDigitsStr = '';
+for(var i = 0; i < l; i++) {
+	var info = clone(chat[i]);
+	if(info.stricken) continue;
+	var no = getNo(info.body);
+	if(no == null) continue;
+	var noLen = no.length;
+	if(noLen <= 2 || noLen % 2 != 0 || noLen > 6) {
+		continue;
+	}
+
+	var h1 = no.substring(0, noLen / 2);
+	var h2 = no.slice(-noLen / 2);
+	if(h1 == h2) {
+		if(info.author == null) info.author = '[deleted]';
+		else {
+			info.author = '/u/' + info.author;
+			if(!repeatingDigitsLeaderboard.hasOwnProperty(info.author)) repeatingDigitsLeaderboard[info.author] = 0;
+			repeatingDigitsLeaderboard[info.author]++;
+		}
+		repeatingDigitsStr += "* [" + addCommas(no) + "](https://www.reddit.com/live/" +threadID+ "/updates/" + info.id + ") - "+ info.author + '\n';
+	}
+}
+var repeatingDigitsLeaderboardArr = [];
+for(var k in repeatingDigitsLeaderboard) {
+	repeatingDigitsLeaderboardArr.push({user: k, count: repeatingDigitsLeaderboard[k]});
+}
+repeatingDigitsLeaderboardArr.sort(function(a, b) {
+	return b.count - a.count;
+});
+var repeatingDigitsLeaderboardStr = '';
+for(var i = 0, len = Math.min(repeatingDigitsLeaderboardArr.length, 10); i < len; i++) {
+	repeatingDigitsLeaderboardStr += (i+1) + ' | ' + repeatingDigitsLeaderboardArr[i].user + ' | ' + repeatingDigitsLeaderboardArr[i].count + '\n';
+}
+document.getElementById('RepeatingDigits').innerHTML = repeatingDigitsLeaderboardStr + '\n\#\#\#Repeating Digits\n\n' + repeatingDigitsStr;
+
+// PALINDROMES
+var palindromes = [];
+var palindromesLeaderboard = [];
+var palindromesStr = '';
+for(var i = 0; i < l; i++) {
+	var info = clone(chat[i]);
+	if(info.stricken) continue;
+	var no = getNo(info.body);
+	if(no == null) continue;
+	if(no.length <= 2 || no.length > 6) continue;
+
+	var noReverse = no.split('').reverse().join('');
+	if(no == noReverse) {
+		palindromes.push(info);
+		if(info.author == null) info.author = '[deleted]';
+		else {
+			info.author = '/u/' + info.author;
+			if(!palindromesLeaderboard.hasOwnProperty(info.author)) palindromesLeaderboard[info.author] = 0;
+			palindromesLeaderboard[info.author]++;
+		}
+		palindromesStr += "* [" + addCommas(no) + "](https://www.reddit.com/live/" +threadID+ "/updates/" + info.id + ") - "+ info.author + '\n';
+	}
+}
+var palindromesLeaderboardArr = [];
+for(var k in palindromesLeaderboard) {
+	palindromesLeaderboardArr.push({user: k, count: palindromesLeaderboard[k]});
+}
+palindromesLeaderboardArr.sort(function(a, b) {
+	return b.count - a.count;
+});
+var palindromesLeaderboardStr = '';
+for(var i = 0, len = Math.min(palindromesLeaderboardArr.length, 10); i < len; i++) {
+	palindromesLeaderboardStr += (i+1) + ' | ' + palindromesLeaderboardArr[i].user + ' | ' + palindromesLeaderboardArr[i].count + '\n';
+}
+document.getElementById('Palindromes').innerHTML = palindromesLeaderboardStr + '\n\#\#\#Palindromes\n\n' + palindromesStr;
+
+// DAYS COUNTED
+// QUITE SLOW
+var date = chat[chat.length - 1].created_utc + 86400;
+var DaysCountedArr = {};
+var DaysCountedLeaderboard = {};
+for(var i = l - 1; i >= 0; i--) {
+	var info = chat[i];
+	if(info.stricken) continue;
+	var d = info.created_utc;
+	while(d >= date) {
+		date += 86400;
+	}
+	if(!DaysCountedArr.hasOwnProperty(date)) {
+		DaysCountedArr[date] = []; 
+	}
+	var author = info.author;
+	if(author == null) continue;
+	else author = '/u/' + author;
+
+	if(DaysCountedArr[date].indexOf(author) == -1) {
+		DaysCountedArr[date].push(author);
+		if(!DaysCountedLeaderboard.hasOwnProperty(author)) {
+			DaysCountedLeaderboard[author] = 0;
+		}
+		DaysCountedLeaderboard[author]++;
+	}
+}
+var DaysCounted = [];
+for(var k in DaysCountedLeaderboard) {
+	DaysCounted.push({user: k, count: DaysCountedLeaderboard[k]});
+}
+DaysCounted.sort(function(a, b) {
+	return b.count - a.count;
+});
+var DaysCountedStr = '';
+for(var i = 0, len = DaysCounted.length; i < len; i++) {
+	DaysCountedStr += (i+1) + ' | ' + DaysCounted[i].user + ' | ' + DaysCounted[i].count + '\n';
+}
+document.getElementById('DaysCounted').innerHTML = DaysCountedStr;
+
+}
+
+</script>
+
+</body>
+</html>

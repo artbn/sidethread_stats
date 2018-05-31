@@ -1,0 +1,149 @@
+﻿<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Update Database</title>
+<script src='https://ajax.googleapis.com/ajax/libs/jquery/2.2.0/jquery.min.js'></script>
+<script>
+var decodeEntities = (function() {
+  // this prevents any overhead from creating the object each time
+  var element = document.createElement('div');
+
+  function decodeHTMLEntities (str) {
+	if(str && typeof str === 'string') {
+	  // strip script/html tags
+	  str = str.replace(/<script[^>]*>([\S\s]*?)<\/script>/gmi, '');
+	  str = str.replace(/<\/?\w(?:[^"'>]|"[^"]*"|'[^']*')*>/gmi, '');
+	  element.innerHTML = str;
+	  str = element.textContent;
+	  element.textContent = '';
+	}
+
+	return str;
+  }
+
+  return decodeHTMLEntities;
+})();
+String.prototype.replaceLast = function (what, replacement) {
+	return this.split(' ').reverse().join(' ').replace(new RegExp(what), replacement).split(' ').reverse().join(' ');
+};
+</script>
+<script>
+
+(function() {
+
+var threadID;
+var stopPoint = [];
+var parameters = {count: 100};
+var update = [];
+
+function handleThreadID() {
+	threadID = document.getElementById('threadID').value;
+	document.getElementById('threadIDBox').style.display = 'none';
+	$.getScript('data.' +threadID+ '.js')
+	.success(function() {
+		for(var i = 0; i < 10; i++) {
+			stopPoint.push(chat[i].name);
+		}
+	});
+	chatRequest();
+}
+function chatRequest() {
+	$.ajax({
+		method: 'GET',
+		data: parameters,
+		dataType: 'json',
+		url: 'https://www.reddit.com/live/' +threadID+ '.json',
+		success: function(data) {
+			var msgs = data.data.children;
+			var l = msgs.length;
+			if(l == 0) {
+				completed();
+				return;
+			}
+			for(var i = 0; i < l; i++) {
+				if(stopPoint.indexOf(msgs[i].data.name) > -1) {
+					completed();
+					return;
+				}
+				update.push(msgs[i].data);
+			}
+			var last = msgs[l - 1].data.name;
+			parameters.after = last;
+			document.getElementById('status').innerHTML = 'Retrieved ' + update.length + ' messages';
+			chatRequest();
+		}
+	});
+}
+function completed() {
+	if(update.length == 0) {
+		document.getElementById('status').innerHTML = 'Database already up to date';
+		return;
+	}
+	document.getElementById('status').innerHTML = 'Retrieval complete (' + update.length + ' messages)<br>Updating database...';
+	updateDatabase();
+}
+function updateDatabase() {
+	var output = JSON.stringify(update).replace('[', '').replace(/\]([^\]]*)$/, '') + ',';
+	$.ajax({
+		method: 'POST',
+		data: {thread: threadID, content: output},
+		url: 'process.php',
+		success: function(data) {
+			document.getElementById('status').innerHTML = data;
+			if(data.indexOf(' successful') > -1) {
+				// Successful
+			} else {
+				document.getElementById('retry').style.display = '';
+			}
+		},
+		error: function() {
+			document.getElementById('status').innerHTML = 'Server error. Please try again.'
+			document.getElementById('retry').style.display = '';
+		}
+	});
+}
+window.onload = function() {
+	document.getElementById('threadID').focus();
+	document.getElementById('threadID').onkeydown = function(e) {
+		if(e.keyCode == 13) {
+			handleThreadID();
+		}
+	}
+	document.getElementById('btn').onclick = handleThreadID;
+	document.getElementById('retry').onclick = function() {
+        this.style.display = 'none';
+        updateDatabase();
+    }
+}
+
+
+})();
+
+
+</script>
+<style>
+body {
+	text-align: center;
+	font-family: Arial;
+}
+input[type=button] {
+	cursor: pointer;
+}
+</style>
+</head>
+
+<body>
+
+<h1 id='status'>Initializing...</h1>
+
+<div id='threadIDBox'>
+<b>Retrieve messages from:</b>
+www.reddit.com/live/ <input type='text' id='threadID' placeholder='Thread ID (from URL)'>
+<input type='button' id='btn' value='Enter'>
+</div>
+
+<input type='button' id='retry' value='Retry' style='display: none;'>
+
+</body>
+</html>
